@@ -56,6 +56,8 @@ function! pum#map#select_relative(delta) abort
     endif
   endif
 
+  call pum#_draw_scrollbar()
+
   return ''
 endfunction
 

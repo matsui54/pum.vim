@@ -23,6 +23,9 @@ function! pum#_init() abort
         \ 'height': -1,
         \ 'horizontal_menu': v:false,
         \ 'id': -1,
+        \ 'id1': -1,
+        \ 'id2': -1,
+        \ 'has_scrollbar': v:false,
         \ 'len': 0,
         \ 'orig_input': '',
         \ 'pos': [],
@@ -255,6 +258,8 @@ function! s:open(startcol, items, mode) abort
   let pum.col = pum#_col()
   let pum.orig_input = pum#_getline()[a:startcol - 1 : pum#_col() - 2]
 
+  call pum#_draw_scrollbar()
+
   " Clear current highlight
   silent! call matchdelete(pum#_cursor_id(), pum.id)
 
@@ -311,6 +316,69 @@ function! s:open(startcol, items, mode) abort
   return pum.id
 endfunction
 
+function! pum#_draw_scrollbar() abort
+  let pum = pum#_get()
+  if pum.id <= 0
+    return ''
+  endif
+
+  let total = len(pum.items)
+  if total <= pum.height
+    let pum.has_scrollbar = v:false
+    if pum.id1 > 0
+      call nvim_win_close(pum.id1, v:true)
+      let pum.id1 = -1
+    endif
+    if pum.id2 > 0
+      call nvim_win_close(pum.id2, v:true)
+      let pum.id2 = -1
+    endif
+    return
+  endif
+  let bar_height = float2nr(ceil(pum.height * (pum.height*1.0 / total)))
+  let bar_offset = min([pum.height - bar_height, 
+        \ float2nr(floor(pum.height * (getwininfo(pum.id)[0].topline * 1.0 / total)))])
+  let winopts = {
+        \ 'relative': 'editor',
+        \ 'width': 1,
+        \ 'height': pum.height,
+        \ 'col': pum.pos[1] + pum.width,
+        \ 'row': pum.pos[0],
+        \ 'anchor': 'NW',
+        \ 'style': 'minimal',
+        \ 'zindex': 101,
+        \ }
+  if pum.id1 > 0
+    call nvim_win_set_config(pum.id1, winopts)
+  else
+    let winopts.noautocmd = v:true
+    let pum.id1 = 
+          \ nvim_open_win(nvim_create_buf(v:false, v:true), v:false, winopts)
+    call nvim_win_set_option(pum.id1, 'winhighlight',
+          \ 'EndOfBuffer:PmenuSbar,Normal:PmenuSbar,NormalNC:PmenuSbar,NormalFloat:PmenuSbar')
+  endif
+  let winopts2 = {
+        \ 'relative': 'editor',
+        \ 'width': 1,
+        \ 'height': bar_height,
+        \ 'col': pum.pos[1] + pum.width,
+        \ 'row': pum.pos[0] + bar_offset,
+        \ 'anchor': 'NW',
+        \ 'style': 'minimal',
+        \ 'zindex': 102,
+        \ }
+  if pum.id2 > 0
+    call nvim_win_set_config(pum.id2, winopts2)
+  else
+    let winopts2.noautocmd = v:true
+    let pum.id2 = 
+          \ nvim_open_win(nvim_create_buf(v:false, v:true), v:false, winopts2)
+    call nvim_win_set_option(pum.id2, 'winhighlight',
+          \ 'EndOfBuffer:PmenuThumb,Normal:PmenuThumb,NormalNC:PmenuThumb,NormalFloat:PmenuThumb')
+  endif
+  let pum.has_scrollbar = v:true
+endfunction
+
 function! pum#close() abort
   call s:complete_done()
 
@@ -336,6 +404,14 @@ function! s:close() abort
     else
       call nvim_win_close(pum.id, v:true)
       call nvim_buf_clear_namespace(pum.buf, g:pum#_namespace, 1, -1)
+    endif
+    if pum.id1 > 0
+      call nvim_win_close(pum.id1, v:true)
+      let pum.id1 = -1
+    endif
+    if pum.id2 > 0
+      call nvim_win_close(pum.id2, v:true)
+      let pum.id2 = -1
     endif
   else
     " Note: prop_remove() is not needed.
@@ -396,7 +472,7 @@ function! pum#get_pos() abort
         \ 'row': pum.pos[0],
         \ 'col': pum.pos[1],
         \ 'size': pum.len,
-        \ 'scrollbar': v:false,
+        \ 'scrollbar': pum.has_scrollbar,
         \ }
 endfunction
 
